@@ -2,6 +2,76 @@ import Repository from '../models/Repository.js';
 import Subscription from '../models/Subscription.js';
 import githubService from '../services/githubService.js';
 
+export const addRepository = async (req, res) => {
+	try {
+		if (!req.user) {
+			return res.status(401).json({ error: 'Authentication required' });
+		}
+
+		const { url } = req.body;
+		
+		// Extract owner and name from GitHub URL
+		const match = url.match(/github\.com\/([^/]+)\/([^/]+)/);
+		if (!match) {
+			return res.status(400).json({ error: 'Invalid GitHub repository URL' });
+		}
+
+		const [, owner, name] = match;
+
+		// Check if repository already exists
+		let repository = await Repository.findOne({ owner, name });
+
+		if (!repository) {
+			// Fetch repository data from GitHub
+			const githubRepo = await githubService.getRepository(owner, name);
+			if (!githubRepo) {
+				return res.status(404).json({ error: 'Repository not found on GitHub' });
+			}
+
+			// Create new repository
+			repository = await Repository.create({
+				owner,
+				name,
+				fullName: `${owner}/${name}`,
+				description: githubRepo.description,
+				language: githubRepo.language,
+				stars: githubRepo.stargazers_count,
+				forks: githubRepo.forks_count,
+				topics: githubRepo.topics,
+				url: githubRepo.url,
+				htmlUrl: githubRepo.html_url,
+				cloneUrl: githubRepo.clone_url,
+				defaultBranch: githubRepo.default_branch,
+				isArchived: githubRepo.archived,
+				isActive: !githubRepo.archived && !githubRepo.disabled,
+				githubId: githubRepo.id
+			});
+		}
+
+		// Create subscription if it doesn't exist
+		const subscription = await Subscription.findOne({
+			userId: req.user._id,
+			repositoryId: repository._id
+		});
+
+		if (!subscription) {
+			await Subscription.create({
+				userId: req.user._id,
+				repositoryId: repository._id,
+				frequency: 'daily'
+			});
+		}
+
+		res.json({
+			repository,
+			isSubscribed: true
+		});
+	} catch (error) {
+		console.error('Error adding repository:', error);
+		res.status(500).json({ error: error.message });
+	}
+};
+
 export const getRepositories = async (req, res) => {
 	try {
 		// If user is not authenticated, we can't show subscription status
@@ -39,15 +109,14 @@ export const getRepositories = async (req, res) => {
 		if (sort === 'forks') sortOptions.forks = -1;
 		if (sort === 'recent') sortOptions.createdAt = -1;
 		
-		// Get repositories
-		const repositories = await Repository.find(query)
-			.sort(sortOptions)
-			.limit(limit * 1)
-			.skip((page - 1) * limit)
-			.select('owner name stars githubId');
-			
-		// Add subscription status to each repository
+        // Get repositories
+        const repositories = await Repository.find(query)
+            .sort(sortOptions)
+            .limit(limit * 1)
+            .skip((page - 1) * limit)
+            .select('_id owner name stars githubId');		// Add subscription status to each repository
 		const reposWithStatus = repositories.map(repo => ({
+			id: repo._id,  // Include the MongoDB _id as id
 			owner: repo.owner,
 			name: repo.name,
 			stars: repo.stars || 0,
@@ -95,46 +164,10 @@ export const getRepository = async (req, res) => {
 	}
 };
 
-export const addRepository = async (req, res) => {
-	try {
-		const { owner, name } = req.body;
-		
-		if (!owner || !name) {
-			return res.status(400).json({ error: 'Owner and name are required' });
-		}
-		
-		const fullName = `${owner}/${name}`;
-		
-		// Check if repository already exists
-		const existing = await Repository.findOne({ fullName });
-		if (existing) {
-			return res.status(409).json({ error: 'Repository already exists' });
-		}
-		
-		// Create new repository (will be populated by sync job)
-		const repository = new Repository({
-			owner,
-			name,
-			fullName,
-			isActive: true
-		});
-		
-		await repository.save();
-		
-		res.status(201).json(repository);
-	} catch (error) {
-		res.status(500).json({ error: error.message });
-	}
-};
-
 export const getLanguages = async (req, res) => {
 	try {
-		const languages = await Repository.distinct('language', { 
-			isActive: true, 
-			language: { $ne: null } 
-		});
-		
-		res.json(languages.sort());
+		const languages = await Repository.distinct('language');
+		res.json(languages.filter(Boolean));
 	} catch (error) {
 		res.status(500).json({ error: error.message });
 	}

@@ -14,6 +14,7 @@ import authRouter from './routes/auth.js';
 import repositoryRouter from './routes/repositories.js';
 import subscriptionRouter from './routes/subscriptions.js';
 import issueRouter from './routes/issues.js';
+import userRouter from './routes/user.js'; // Import user router
 import { configurePassport } from './config/passport.js';
 import passport from 'passport';
 import { connectToDatabase } from './config/db.js';
@@ -26,7 +27,8 @@ const app = express();
 // Middleware
 app.use(morgan('dev'));
 app.use(cors({
-	origin: process.env.CORS_ORIGIN?.split(',') || ['http://localhost:3000'],
+	origin: ['http://localhost:5173'],
+	methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
 	credentials: true
 }));
 app.use(express.json());
@@ -63,6 +65,7 @@ app.use('/auth', authRouter);
 app.use('/repositories', repositoryRouter);
 app.use('/subscriptions', subscriptionRouter);
 app.use('/issues', issueRouter);
+app.use('/user', userRouter); // Use user router
 
 app.get('/', (_req, res) => {
 	res.json({ ok: true, name: 'github-auth-backend Running' });

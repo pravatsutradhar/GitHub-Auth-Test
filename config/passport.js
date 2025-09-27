@@ -29,20 +29,34 @@ export function configurePassport() {
 					callbackURL: process.env.GITHUB_CALLBACK_URL || 'http://localhost:4000/auth/github/callback',
 					scope: ['read:user', 'user:email']
 				},
-				async (_accessToken, _refreshToken, profile, done) => {
+				async (accessToken, _refreshToken, profile, done) => {
 					try {
 						const primaryEmail = Array.isArray(profile.emails) && profile.emails.length > 0 ? profile.emails[0].value : undefined;
-						const existing = await User.findOne({ githubId: profile.id });
-						if (existing) {
-							return done(null, existing);
+						let user = await User.findOne({ githubId: profile.id });
+						
+						if (user) {
+							// Update existing user
+							user.username = profile.username;
+							user.email = primaryEmail;
+							user.avatarUrl = profile.photos?.[0]?.value;
+							user.accessToken = accessToken;
+							await user.save();
+						} else {
+							// Create new user
+							user = await User.create({
+								githubId: profile.id,
+								username: profile.username,
+								email: primaryEmail,
+								avatarUrl: profile.photos?.[0]?.value,
+								accessToken
+							});
 						}
-						const created = await User.create({
-							githubId: profile.id,
-							username: profile.username,
-							email: primaryEmail,
-							avatarUrl: profile.photos?.[0]?.value
-						});
-						return done(null, created);
+
+						// Sync user's repositories
+						const { syncUserRepositories } = await import('../services/repositoryService.js');
+						await syncUserRepositories(accessToken);
+
+						return done(null, user);
 					} catch (err) {
 						return done(err);
 					}

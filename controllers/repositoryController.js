@@ -1,9 +1,25 @@
 import Repository from '../models/Repository.js';
+import Subscription from '../models/Subscription.js';
+import githubService from '../services/githubService.js';
 
 export const getRepositories = async (req, res) => {
 	try {
+		// If user is not authenticated, we can't show subscription status
+		if (!req.user) {
+			return res.status(401).json({ error: 'Authentication required' });
+		}
+
 		const { language, search, page = 1, limit = 20, sort = 'stars' } = req.query;
 		
+		// First, get all repositories the user is subscribed to
+		const userSubscriptions = await Subscription.find({ 
+			userId: req.user._id,
+			isActive: true 
+		}).select('repositoryId');
+		
+		const subscribedRepoIds = userSubscriptions.map(sub => sub.repositoryId);
+		
+		// Build repository query
 		const query = { isActive: true, isArchived: false };
 		
 		if (language && language !== 'all') {
@@ -23,16 +39,36 @@ export const getRepositories = async (req, res) => {
 		if (sort === 'forks') sortOptions.forks = -1;
 		if (sort === 'recent') sortOptions.createdAt = -1;
 		
+		// Get repositories
 		const repositories = await Repository.find(query)
 			.sort(sortOptions)
 			.limit(limit * 1)
 			.skip((page - 1) * limit)
-			.select('-__v');
+			.select('owner name stars githubId');
+			
+		// Add subscription status to each repository
+		const reposWithStatus = repositories.map(repo => ({
+			owner: repo.owner,
+			name: repo.name,
+			stars: repo.stars || 0,
+			issues: 0, // We'll update this with GitHub API
+			isSubscribed: subscribedRepoIds.some(id => id.equals(repo._id))
+		}));
+
+		// Get fresh issue counts from GitHub
+		await Promise.all(reposWithStatus.map(async (repo) => {
+			try {
+				const githubRepo = await githubService.getRepository(repo.owner, repo.name);
+				repo.issues = githubRepo.open_issues_count || 0;
+			} catch (err) {
+				console.error(`Failed to get issue count for ${repo.owner}/${repo.name}:`, err.message);
+			}
+		}));
 			
 		const total = await Repository.countDocuments(query);
 		
 		res.json({
-			repositories,
+			repositories: reposWithStatus,
 			pagination: {
 				current: parseInt(page),
 				pages: Math.ceil(total / limit),

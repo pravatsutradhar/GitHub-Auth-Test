@@ -46,7 +46,7 @@ const sessionConfig = {
 // Only use MongoDB store if MongoDB is available
 try {
 	sessionConfig.store = MongoStore.create({ 
-		mongoUrl: process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/github-auth' 
+		mongoUrl: process.env.MONGODB_URI
 	});
 } catch (error) {
 	console.warn('⚠️  Using memory session store (MongoDB not available)');
@@ -68,7 +68,7 @@ app.use('/issues', issueRouter);
 app.use('/user', userRouter); // Use user router
 
 app.get('/', (_req, res) => {
-	res.json({ ok: true, name: 'github-auth-backend Running' });
+	res.json('github-auth-backend Running');
 });
 
 async function start() {

@@ -27,7 +27,7 @@ const app = express();
 // Middleware
 app.use(morgan('dev'));
 app.use(cors({
-	origin: ['http://localhost:5173', 'https://provat-github-auth.netlify.app'],
+	origin: ['https://provat-github-auth.netlify.app'],
 	methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
 	credentials: true
 }));

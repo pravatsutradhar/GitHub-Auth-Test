@@ -25,7 +25,7 @@ export async function connectToDatabase(mongoUri) {
             if (attempt === maxRetries) {
                 throw new Error('MongoDB connection failed after maximum retries: ' + error.message);
             }
-            await setTimeout(1000 * attempt); // Exponential backoff
+            await setTimeout(1000 * attempt);
             attempt++;
         }
     }

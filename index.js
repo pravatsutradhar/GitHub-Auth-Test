@@ -36,7 +36,12 @@ const sessionConfig = {
     secret: process.env.SESSION_SECRET || 'dev_secret_change_me',
     resave: false,
     saveUninitialized: false,
-    cookie: { httpOnly: true, sameSite: 'lax', secure: process.env.NODE_ENV === 'production' }
+    cookie: { 
+        httpOnly: true, 
+        sameSite: 'lax', 
+        secure: process.env.NODE_ENV === 'production',
+        maxAge: 14 * 24 * 60 * 60 * 1000 // 14 days
+    }
 };
 
 try {
@@ -51,7 +56,9 @@ try {
             maxTimeout: 5000
         }
     });
+    console.log('✅ MongoDB session store initialized');
 } catch (error) {
+    console.error('❌ Failed to initialize MongoDB session store:', error.message);
     if (process.env.NODE_ENV === 'production') {
         throw new Error('MongoDB session store is required in production: ' + error.message);
     }
@@ -71,16 +78,16 @@ app.use('/issues', issueRouter);
 app.use('/user', userRouter);
 
 app.get('/', (_req, res) => {
-    res.send('github-auth-backend Running');
+    res.json('github-auth-backend Running');
 });
 
-// Global error handler
 app.use((err, req, res, next) => {
     console.error('❌ Server Error:', {
         message: err.message,
         stack: err.stack,
         path: req.path,
-        method: req.method
+        method: req.method,
+        timestamp: new Date().toISOString()
     });
     res.status(500).json({
         error: 'Internal Server Error',

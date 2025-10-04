@@ -118,10 +118,7 @@ const app = express();
 
 app.use(morgan('dev'));
 app.use(cors({
-    origin: [
-        'https://provat-github-auth.netlify.app',
-        process.env.NODE_ENV === 'development' && 'http://localhost:5173'
-    ].filter(Boolean),
+    origin: ['https://provat-github-auth.netlify.app'],
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     credentials: true
 }));
